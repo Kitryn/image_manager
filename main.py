@@ -11,7 +11,7 @@ def walk_directory(root_directory):
         for parent_dir in path_obj.parents:
             if str(parent_dir.name).startswith("."): return False
         return True
-    return (file for file in Path(root_directory).glob("**/[!.]*") if file_filter(file))
+    return (file for file in Path(root_directory).glob("**/[!.]*") if file_filter(file))  # this can be a generator
 
 def init_db():
     with conn:
@@ -19,11 +19,17 @@ def init_db():
             sql_as_string = sql_file.read()
         conn.executescript(sql_as_string)
 
-def add_metadata_to_db():
-    pass
+def add_metadata_to_db(file_list):
+    # Takes a iterable of Path objects of files to add
+    # TODO: try/error bc it likely will shout at you if you insert duplicates
+    # Prepare iterable: fname, fpath, fhash
+    metadata = [(file.name, str(file.parent), "asd"+file.name) for file in file_list]
+    
+    with conn:
+        conn.executemany("INSERT INTO metadata(fname, fpath, fhash) VALUES(?, ?, ?)", metadata)
+        
 
 if __name__ == "__main__":
     init_db()
-    for file in walk_directory(Path(".")):
-        print(file)
+    add_metadata_to_db(walk_directory(Path(".")))
     

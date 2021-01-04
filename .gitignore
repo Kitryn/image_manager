@@ -134,3 +134,4 @@ dmypy.json
 
 # image_manager
 *.db
+*.db-journal
