@@ -46,6 +46,11 @@ def set_preference(pref, val):
     with conn:
         conn.execute("INSERT INTO prefs(pref, val) VALUES(?, ?)", (pref, val))
 
+def get_all_preferences():
+    for key in OPTIONS.keys():
+        val = get_preference(key)
+        OPTIONS[key] = val
+
 def add_metadata_to_db(file_list):
     # Takes a iterable of Path objects of files to add
     # TODO: try/error bc it likely will shout at you if you insert duplicates
@@ -56,10 +61,8 @@ def add_metadata_to_db(file_list):
         conn.executemany("INSERT INTO metadata(fpath, fhash) VALUES(?, ?)", metadata)
 
 def load_gallery():
-    gr = get_preference("gallery_root")
-    assert gr, "Failed to look up gallery root in preferences"
-    OPTIONS["gallery_root"] = gr
-
+    print(OPTIONS)
+    
 def init_new_gallery(path_to_gallery):
     # Verify new path is valid
     gallery_path = Path(path_to_gallery).expanduser().resolve(strict=True)  # Throws FileNotFoundError if path does not exist
@@ -78,12 +81,12 @@ def main():
     args = parser.parse_args()
     
     # Before initialising the gallery, check we have a valid reference to one
-    gallery_dir = get_preference("gallery_root")
+    get_all_preferences()
 
-    if args.directory and gallery_dir:
+    if args.directory and OPTIONS["gallery_root"]:
         # Attempted to set a directory when one already exists
         raise Exception("Attempted to set gallery root when one is already set")
-    elif not gallery_dir:
+    elif not OPTIONS["gallery_root"]:
         if not args.directory:
             raise Exception("Gallery root is not set!")
         init_new_gallery(args.directory)
