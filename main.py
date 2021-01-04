@@ -1,5 +1,6 @@
 import sqlite3
 from pathlib import Path
+import hashlib
 
 conn = sqlite3.connect("example.db")
 
@@ -19,11 +20,19 @@ def init_db():
             sql_as_string = sql_file.read()
         conn.executescript(sql_as_string)
 
+def file_checksum(file):
+    # Takes a single Path object denoting a file and returns the md5 string
+    hash_md5 = hashlib.md5()
+    with open(file, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
 def add_metadata_to_db(file_list):
     # Takes a iterable of Path objects of files to add
     # TODO: try/error bc it likely will shout at you if you insert duplicates
     # Prepare iterable: fname, fpath, fhash
-    metadata = [(file.name, str(file.parent), "asd"+file.name) for file in file_list]
+    metadata = [(file.name, str(file.parent), file_checksum(file)) for file in file_list]
     
     with conn:
         conn.executemany("INSERT INTO metadata(fname, fpath, fhash) VALUES(?, ?, ?)", metadata)
