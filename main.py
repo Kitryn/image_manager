@@ -1,8 +1,12 @@
 import sqlite3
 from pathlib import Path
 import hashlib
+import argparse
 
 conn = sqlite3.connect("example.db")
+OPTIONS = {
+    "gallery_root": None
+}
 
 def walk_directory(root_directory):
     # Returns a tuple? of all files and their paths, excludes dotfiles and dirs starting with dot
@@ -34,7 +38,13 @@ def get_preference(pref):
     # Looks up the db and returns a value for the selected pref
     with conn:
         cur = conn.execute("SELECT pref, val FROM prefs WHERE(pref=?)",(pref,))
-        print(cur.fetchone())
+        result = cur.fetchone()
+        if result: return result[1]
+    return None
+
+def set_preference(pref, val):
+    with conn:
+        conn.execute("INSERT INTO prefs(pref, val) VALUES(?, ?)", (pref, val))
 
 def add_metadata_to_db(file_list):
     # Takes a iterable of Path objects of files to add
@@ -44,10 +54,50 @@ def add_metadata_to_db(file_list):
     
     with conn:
         conn.executemany("INSERT INTO metadata(fpath, fhash) VALUES(?, ?)", metadata)
-        
+
+def load_gallery():
+    gr = get_preference("gallery_root")
+    assert gr, "Failed to look up gallery root in preferences"
+    OPTIONS["gallery_root"] = gr
+
+def init_new_gallery(path_to_gallery):
+    # Verify new path is valid
+    gallery_path = Path(path_to_gallery).expanduser().resolve(strict=True)  # Throws FileNotFoundError if path does not exist
+    if gallery_path.is_file(): raise Exception("Given path must be a valid directory")
+    
+    # DELETE ALL EXISTING DATA!
+    with conn:
+        conn.execute("DELETE FROM metadata")
+        conn.execute("DELETE FROM tags")
+        conn.execute("DELETE FROM albums")
+    set_preference("gallery_root", str(gallery_path))
+    
+
+def main():
+    init_db()
+    args = parser.parse_args()
+    
+    # Before initialising the gallery, check we have a valid reference to one
+    gallery_dir = get_preference("gallery_root")
+
+    if args.directory and gallery_dir:
+        # Attempted to set a directory when one already exists
+        raise Exception("Attempted to set gallery root when one is already set")
+    elif not gallery_dir:
+        if not args.directory:
+            raise Exception("Gallery root is not set!")
+        init_new_gallery(args.directory)
+    else:
+        # gallery dir is already set
+        print("Continue initialisation")
+    
+    load_gallery()    
+    # add_metadata_to_db(walk_directory(Path(".")))
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-d", "--directory", help="Root directory of image gallery")
 
 if __name__ == "__main__":
-    init_db()
-    add_metadata_to_db(walk_directory(Path(".")))
-    get_preference("gallery_root")
+    main()
+    print("end")
     
