@@ -10,7 +10,6 @@ OPTIONS = {
 
 def walk_directory(root_directory):
     # Returns a tuple? of all files and their paths, excludes dotfiles and dirs starting with dot
-    # This uses relative directories, can maybe expand to absolutes elsewhere if required
     def file_filter(path_obj):
         # Filter Paths we don't want, like directories or dotfiles
         if not path_obj.is_file(): return False
@@ -18,7 +17,7 @@ def walk_directory(root_directory):
             if str(parent_dir.name).startswith("."): return False
         return True
 
-    return (file for file in Path(root_directory).glob("**/[!.]*") if file_filter(file))  # this can be a generator
+    return (file for file in Path(root_directory).glob("**/[!.]*") if file_filter(file))
 
 def init_db():
     with conn:
@@ -45,6 +44,7 @@ def get_preference(pref):
 def set_preference(pref, val):
     with conn:
         conn.execute("INSERT INTO prefs(pref, val) VALUES(?, ?)", (pref, val))
+        OPTIONS[pref] = val
 
 def get_all_preferences():
     for key in OPTIONS.keys():
@@ -60,7 +60,30 @@ def add_metadata_to_db(file_list):
     with conn:
         conn.executemany("INSERT INTO metadata(fpath, fhash) VALUES(?, ?)", metadata)
 
+def batch_get():
+    with conn:
+        cur = conn.execute("SELECT * FROM metadata")
+        res = cur.fetchall()
+        return [Path(file[1]) for file in res]
+
+def batch_compare_missing(file_list):
+    # Takes an iterable of Path objects
+    # Compares them to the db and returns list of files that are in the db but are missing in the directory
+    files_in_db = batch_get()
+    file_list_set = {file for file in file_list}
+    result_set = {file for file in files_in_db}
+    return result_set - file_list_set
+    
+def batch_compare_new_files(file_list):
+    # Takes an iterable of Path objects
+    # Compares them to the db and returns list of files that are missing in db
+    files_in_db = batch_get()
+    file_list_set = {file for file in file_list}
+    result_set = {file for file in files_in_db}
+    return file_list_set - result_set
+
 def load_gallery():
+    add_metadata_to_db(walk_directory(Path(OPTIONS["gallery_root"])))
     print(OPTIONS)
     
 def init_new_gallery(path_to_gallery):
@@ -88,14 +111,13 @@ def main():
         raise Exception("Attempted to set gallery root when one is already set")
     elif not OPTIONS["gallery_root"]:
         if not args.directory:
-            raise Exception("Gallery root is not set!")
+            raise Exception("Gallery root is not set! Run with args -d DIRECTORY to set directory")
         init_new_gallery(args.directory)
     else:
         # gallery dir is already set
         print("Continue initialisation")
     
     load_gallery()    
-    # add_metadata_to_db(walk_directory(Path(".")))
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--directory", help="Root directory of image gallery")
